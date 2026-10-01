@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo de Colores</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- html2pdf Library para generar el PDF visual del cuadro -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .check-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .check-card:hover {
+            transform: translateY(-1px);
+        }
+
+        .check-card.selected {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+
+        /* Temas de color para selecciones activas */
+        .color-row-verde.selected { background-color: #dcfce7; border-color: #22c55e; color: #15803d; }
+        .color-row-rojo.selected { background-color: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+        .color-row-naranja.selected { background-color: #ffedd5; border-color: #f97316; color: #c2410c; }
+        .color-row-morado.selected { background-color: #f3e8ff; border-color: #a855f7; color: #7e22ce; }
+        .color-row-blanco.selected { background-color: #f1f5f9; border-color: #64748b; color: #334155; }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased bg-slate-50 pb-12">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-indigo-500 to-purple-500 flex items-center justify-center text-white text-lg shadow-sm">
+                    <i class="fa-solid fa-palette"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                        Bingo de Colores
+                    </h1>
+                    <p class="text-xs text-slate-500 font-medium">Registro de alimentos por color</p>
+                </div>
+            </div>
+
+            <!-- Navegación de Días (Se eliminó el botón 'Siguiente' de la derecha) -->
+            <div class="flex items-center gap-3 bg-slate-100/80 border border-slate-200 rounded-xl p-1.5 text-sm">
+                <button id="btnPrevDayNav" onclick="navigateDay(-1)" title="Día Anterior" class="px-2.5 py-1.5 bg-white hover:bg-slate-200 text-slate-700 rounded-lg transition border border-slate-200 text-xs font-semibold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-chevron-left"></i>
+                    <span>Anterior</span>
+                </button>
+
+                <div class="text-center px-4">
+                    <span class="block text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Viendo</span>
+                    <span id="dayCounterBadge" class="font-bold text-slate-800 text-sm">Día 1</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+
+        <!-- Banner de Instrucciones -->
+        <section class="mb-6 bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-start gap-3">
+                <div class="p-2.5 bg-slate-100 text-slate-600 rounded-xl text-xl hidden sm:block">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                </div>
+                <div>
+                    <h2 class="text-sm font-semibold text-slate-800">Instrucciones de registro</h2>
+                    <p class="text-xs text-slate-600 mt-0.5">Selecciona los colores de vegetales, frutas y hortalizas que consumiste durante el día.</p>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <button id="btnSave" onclick="saveData(true)" class="flex-1 md:flex-none px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl transition shadow-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>Guardar Día</span>
+                </button>
+                <button id="btnNextDay" onclick="advanceToNextDay()" class="flex-1 md:flex-none px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-xl transition shadow-sm flex items-center justify-center gap-2">
+                    <span>Siguiente Día</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Notification Toast -->
+        <div id="toastNotification" class="hidden mb-6 p-4 rounded-xl text-xs font-medium flex items-center justify-between transition-all duration-300">
+            <div class="flex items-center gap-2">
+                <i id="toastIcon" class="fa-solid fa-circle-check text-base"></i>
+                <span id="toastMessage">Progreso guardado correctamente</span>
+            </div>
+            <button onclick="hideToast()" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Tabla de Registro del Día -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-day text-slate-600"></i>
+                        <span id="tableTitle">Registro del Día 1</span>
+                    </h3>
+                </div>
+                
+                <button onclick="confirmResetDay()" class="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100 transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Reiniciar este Día</span>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100/70 text-slate-700 text-xs border-b border-slate-200 uppercase tracking-wider">
+                            <th class="p-4 font-bold border-r border-slate-200 w-1/4">Color / Categoría</th>
+                            <th class="p-4 text-center border-r border-slate-200 w-1/4">
+                                <span class="font-bold text-slate-800">Desayuno / Merienda / Snacks</span>
+                            </th>
+                            <th class="p-4 text-center border-r border-slate-200 w-1/4">
+                                <span class="font-bold text-slate-800">Almuerzo</span>
+                            </th>
+                            <th class="p-4 text-center w-1/4">
+                                <span class="font-bold text-slate-800">Cena</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="trackerTableBody" class="divide-y divide-slate-200 text-sm">
+                        <!-- Generado dinámicamente con JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Guía de Ejemplos -->
+        <div class="mb-8">
+            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
+                <i class="fa-solid fa-book-open text-slate-600"></i>
+                <span>Guía de ejemplos de frutas y vegetales</span>
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-xl border-l-4 border-emerald-500 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2 text-emerald-800 font-bold text-sm mb-1.5">
+                        <i class="fa-solid fa-leaf"></i>
+                        <span>Verde</span>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        Espinacas, brócoli, aguacate, lechuga, calabacín, kiwis, manzanas verdes, espárragos, pimiento verde, judías verdes, pepino, acelgas, rúcula, guisantes.
+                    </p>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border-l-4 border-red-500 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2 text-red-800 font-bold text-sm mb-1.5">
+                        <i class="fa-solid fa-apple-whole"></i>
+                        <span>Rojo</span>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        Tomates, fresas, pimiento rojo, manzanas rojas, sandía, cerezas, granada, frambuesas, rábanos, remolacha.
+                    </p>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border-l-4 border-amber-500 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2 text-amber-800 font-bold text-sm mb-1.5">
+                        <i class="fa-solid fa-carrot"></i>
+                        <span>Naranja / Amarillo</span>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        Zanahorias, calabaza, pimiento amarillo, naranjas, mandarinas, plátano, melocotón, mango, maíz, piña, caqui, papaya.
+                    </p>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border-l-4 border-purple-500 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2 text-purple-800 font-bold text-sm mb-1.5">
+                        <i class="fa-solid fa-eggplant"></i>
+                        <span>Morado / Azul</span>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        Berenjenas, lombarda (col morada), arándanos, uvas negras/moradas, higos, ciruelas, moras, boniato morado.
+                    </p>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border-l-4 border-slate-500 shadow-sm border border-slate-200 lg:col-span-2">
+                    <div class="flex items-center gap-2 text-slate-800 font-bold text-sm mb-1.5">
+                        <i class="fa-solid fa-cubes-stacked"></i>
+                        <span>Blanco / Marrón</span>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        Ajos, cebollas, champiñones y setas, coliflor, puerro, nabo, jengibre, patatas.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección para Descargar PDF -->
+        <div class="mb-12 bg-gradient-to-br from-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl">
+            <div class="max-w-xl mx-auto text-center">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 flex items-center justify-center text-xl mx-auto mb-4">
+                    <i class="fa-solid fa-file-pdf"></i>
+                </div>
+                <h3 class="text-lg font-bold mb-2">
+                    Descargar Registro Completo
+                </h3>
+                <p class="text-xs text-slate-300 mb-6 leading-relaxed">
+                    Haz clic en el botón para generar y descargar un documento PDF que contiene el resumen visual completo de todos los días registrados hasta el momento.
+                </p>
+                
+                <button onclick="downloadPDF()" class="w-full sm:w-auto px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-lg flex items-center justify-center gap-2.5 mx-auto">
+                    <i class="fa-solid fa-download text-sm"></i>
+                    <span>Descargar PDF</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal de Confirmación -->
+        <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+                <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-lg mb-3">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-base font-bold text-slate-800 mb-1" id="modalTitle">¿Reiniciar este día?</h3>
+                <p class="text-xs text-slate-600 mb-5" id="modalMessage">Se borrarán las marcas del día en pantalla.</p>
+                <div class="flex justify-end gap-2">
+                    <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold transition">Cancelar</button>
+                    <button onclick="resetCurrentDayData()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition shadow-sm">Sí, reiniciar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Div Oculto para Renderizar el Documento PDF Completo -->
+        <div id="pdfExportContainer" class="hidden"></div>
+
+    </main>
+
+    <script>
+        const MEALS = ['Desayuno/Merienda/Snacks', 'Almuerzo', 'Cena'];
+
+        const COLOR_GROUPS = [
+            { id: 'verde', name: 'Verde', bgClass: 'bg-emerald-50 text-emerald-800', borderClass: 'border-emerald-200', activeClass: 'color-row-verde', icon: 'fa-leaf' },
+            { id: 'rojo', name: 'Rojo', bgClass: 'bg-rose-50 text-rose-800', borderClass: 'border-rose-200', activeClass: 'color-row-rojo', icon: 'fa-apple-whole' },
+            { id: 'naranja', name: 'Naranja / Amarillo', bgClass: 'bg-amber-50 text-amber-800', borderClass: 'border-amber-200', activeClass: 'color-row-naranja', icon: 'fa-carrot' },
+            { id: 'morado', name: 'Morado / Azul', bgClass: 'bg-purple-50 text-purple-800', borderClass: 'border-purple-200', activeClass: 'color-row-morado', icon: 'fa-eggplant' },
+            { id: 'blanco', name: 'Blanco / Marrón', bgClass: 'bg-slate-100 text-slate-800', borderClass: 'border-slate-300', activeClass: 'color-row-blanco', icon: 'fa-cubes-stacked' }
+        ];
+
+        let allDaysStore = {};
+        let currentViewingDay = 1;
+        let maxDayReached = 1;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSavedData();
+            renderTable();
+        });
+
+        function getInitialDayState() {
+            const data = {};
+            MEALS.forEach(meal => {
+                data[meal] = {};
+                COLOR_GROUPS.forEach(color => {
+                    data[meal][color.id] = false;
+                });
+            });
+            return data;
+        }
+
+        function loadSavedData() {
+            try {
+                const savedStore = localStorage.getItem('bingo_colores_all_days');
+                if (savedStore) {
+                    allDaysStore = JSON.parse(savedStore);
+                }
+
+                let savedMaxDay = localStorage.getItem('bingo_colores_max_day');
+                if (savedMaxDay !== null) {
+                    maxDayReached = parseInt(savedMaxDay, 10) || 1;
+                } else {
+                    maxDayReached = 1;
+                }
+
+                let savedLastViewed = localStorage.getItem('bingo_colores_last_viewed_day');
+                if (savedLastViewed !== null) {
+                    currentViewingDay = parseInt(savedLastViewed, 10) || 1;
+                } else {
+                    currentViewingDay = 1;
+                }
+
+                if (!allDaysStore[currentViewingDay]) {
+                    allDaysStore[currentViewingDay] = getInitialDayState();
+                }
+            } catch (e) {
+                console.error("Error cargando de localStorage", e);
+                allDaysStore = { 1: getInitialDayState() };
+                currentViewingDay = 1;
+                maxDayReached = 1;
+            }
+        }
+
+        function saveData(showNotification = false) {
+            try {
+                localStorage.setItem('bingo_colores_all_days', JSON.stringify(allDaysStore));
+                localStorage.setItem('bingo_colores_max_day', maxDayReached.toString());
+                localStorage.setItem('bingo_colores_last_viewed_day', currentViewingDay.toString());
+
+                if (showNotification) {
+                    showToast(`Día ${currentViewingDay} guardado correctamente.`, 'success');
+                }
+            } catch (e) {
+                console.error("Error guardando en localStorage", e);
+                showToast('Error al guardar los datos', 'error');
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('trackerTableBody');
+            tbody.innerHTML = '';
+
+            const dayData = allDaysStore[currentViewingDay] || getInitialDayState();
+
+            COLOR_GROUPS.forEach(color => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/50 transition-colors";
+
+                let rowHTML = `
+                    <td class="p-4 font-semibold ${color.bgClass} border-r ${color.borderClass} flex items-center gap-2">
+                        <i class="fa-solid ${color.icon} text-base opacity-80"></i>
+                        <span>${color.name}</span>
+                    </td>
+                `;
+
+                MEALS.forEach((meal) => {
+                    const isChecked = dayData[meal]?.[color.id] || false;
+                    const cellId = `cell-${meal.replace(/[^a-zA-Z]/g, '')}-${color.id}`;
+                    
+                    rowHTML += `
+                        <td class="p-2 text-center border-r border-slate-200 cursor-pointer" onclick="toggleSelection('${meal}', '${color.id}')">
+                            <div id="${cellId}" class="w-full h-11 rounded-xl flex items-center justify-center font-medium text-xs transition-all check-card ${isChecked ? color.activeClass + ' selected font-bold' : 'bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-400'}">
+                                ${isChecked ? '<i class="fa-solid fa-circle-check text-base mr-1.5"></i> Registrado' : '<i class="fa-solid fa-plus text-[10px] mr-1"></i> Marcar'}
+                            </div>
+                        </td>
+                    `;
+                });
+
+                tr.innerHTML = rowHTML;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('tableTitle').innerText = `Registro del Día ${currentViewingDay}`;
+            document.getElementById('dayCounterBadge').innerText = `Día ${currentViewingDay}`;
+
+            document.getElementById('btnPrevDayNav').disabled = (currentViewingDay <= 1);
+        }
+
+        function toggleSelection(meal, colorId) {
+            if (!allDaysStore[currentViewingDay]) {
+                allDaysStore[currentViewingDay] = getInitialDayState();
+            }
+
+            if (!allDaysStore[currentViewingDay][meal]) {
+                allDaysStore[currentViewingDay][meal] = {};
+            }
+
+            const currentState = allDaysStore[currentViewingDay][meal][colorId];
+            allDaysStore[currentViewingDay][meal][colorId] = !currentState;
+
+            saveData(false);
+            renderTable();
+        }
+
+        function navigateDay(delta) {
+            const targetDay = currentViewingDay + delta;
+            if (targetDay < 1) return;
+
+            currentViewingDay = targetDay;
+            if (currentViewingDay > maxDayReached) {
+                maxDayReached = currentViewingDay;
+            }
+
+            if (!allDaysStore[currentViewingDay]) {
+                allDaysStore[currentViewingDay] = getInitialDayState();
+            }
+
+            saveData(false);
+            renderTable();
+        }
+
+        function advanceToNextDay() {
+            saveData(false);
+            maxDayReached++;
+            currentViewingDay = maxDayReached;
+
+            if (!allDaysStore[currentViewingDay]) {
+                allDaysStore[currentViewingDay] = getInitialDayState();
+            }
+
+            saveData(false);
+            renderTable();
+            showToast(`Avanzado a Día ${currentViewingDay}.`, 'info');
+        }
+
+        function confirmResetDay() {
+            document.getElementById('confirmModal').classList.remove('hidden');
+            document.getElementById('confirmModal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            document.getElementById('confirmModal').classList.remove('flex');
+        }
+
+        function resetCurrentDayData() {
+            allDaysStore[currentViewingDay] = getInitialDayState();
+            saveData(false);
+            renderTable();
+            closeModal();
+            showToast(`Día ${currentViewingDay} reiniciado`, 'info');
+        }
+
+        function downloadPDF() {
+            saveData(false);
+
+            const pdfContainer = document.getElementById('pdfExportContainer');
+            pdfContainer.innerHTML = '';
+            pdfContainer.className = "p-4 bg-white font-sans text-slate-800";
+
+            let htmlContent = `
+                <div style="font-family: 'Inter', Arial, sans-serif; padding: 10px;">
+                    <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">
+                        <h1 style="font-size: 16px; font-weight: bold; color: #0f172a; margin: 0;">Registro de Bingo de Colores</h1>
+                        <p style="font-size: 10px; color: #64748b; margin: 2px 0 0 0;">Resumen Consolidado de ${maxDayReached} Día(s) de Registro</p>
+                    </div>
+            `;
+
+            for (let dayNum = 1; dayNum <= maxDayReached; dayNum++) {
+                const dayData = allDaysStore[dayNum] || {};
+
+                htmlContent += `
+                    <div style="margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid;">
+                        <div style="font-size: 11px; font-weight: bold; color: #1e293b; background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; margin-bottom: 4px;">
+                            Día ${dayNum}
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 9px; line-height: 1.1;">
+                            <thead>
+                                <tr style="background-color: #f8fafc; color: #475569; text-transform: uppercase;">
+                                    <th style="padding: 4px 6px; border: 1px solid #cbd5e1; text-align: left; width: 25%;">Color / Categoría</th>
+                                    <th style="padding: 4px 6px; border: 1px solid #cbd5e1; text-align: center; width: 25%;">Desayuno / Merienda / Snacks</th>
+                                    <th style="padding: 4px 6px; border: 1px solid #cbd5e1; text-align: center; width: 25%;">Almuerzo</th>
+                                    <th style="padding: 4px 6px; border: 1px solid #cbd5e1; text-align: center; width: 25%;">Cena</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                COLOR_GROUPS.forEach(color => {
+                    let colorBg = '#ffffff';
+                    let colorText = '#1e293b';
+                    if (color.id === 'verde') { colorBg = '#f0fdf4'; colorText = '#166534'; }
+                    if (color.id === 'rojo') { colorBg = '#fef2f2'; colorText = '#991b1b'; }
+                    if (color.id === 'naranja') { colorBg = '#fff7ed'; colorText = '#9a3412'; }
+                    if (color.id === 'morado') { colorBg = '#faf5ff'; colorText = '#6b21a8'; }
+                    if (color.id === 'blanco') { colorBg = '#f8fafc'; colorText = '#334155'; }
+
+                    htmlContent += `
+                        <tr>
+                            <td style="padding: 3px 6px; border: 1px solid #cbd5e1; font-weight: bold; background-color: ${colorBg}; color: ${colorText};">
+                                ${color.name}
+                            </td>
+                    `;
+
+                    MEALS.forEach(meal => {
+                        const isChecked = dayData[meal]?.[color.id] || false;
+                        if (isChecked) {
+                            htmlContent += `
+                                <td style="padding: 3px 6px; border: 1px solid #cbd5e1; text-align: center; background-color: ${colorBg}; color: ${colorText}; font-weight: bold;">
+                                    ✓ Registrado
+                                </td>
+                            `;
+                        } else {
+                            htmlContent += `
+                                <td style="padding: 3px 6px; border: 1px solid #cbd5e1; text-align: center; color: #cbd5e1;">
+                                    -
+                                </td>
+                            `;
+                        }
+                    });
+
+                    htmlContent += `</tr>`;
+                });
+
+                htmlContent += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            htmlContent += `</div>`;
+            pdfContainer.innerHTML = htmlContent;
+
+            const opt = {
+                margin:       [8, 8, 8, 8],
+                filename:     `Bingo_de_Colores_Registro_${maxDayReached}_Dias.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, scrollY: 0 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            showToast('Generando PDF visual...', 'info');
+
+            pdfContainer.classList.remove('hidden');
+
+            html2pdf().set(opt).from(pdfContainer).save().then(() => {
+                pdfContainer.classList.add('hidden');
+                showToast('¡PDF descargado con éxito!', 'success');
+            }).catch(err => {
+                console.error('Error generando PDF:', err);
+                pdfContainer.classList.add('hidden');
+                showToast('Ocurrió un error al generar el PDF', 'error');
+            });
+        }
+
+        let toastTimeout;
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toastNotification');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            clearTimeout(toastTimeout);
+            toastMsg.innerText = message;
+
+            if (type === 'success') {
+                toast.className = "mb-6 p-3.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm";
+                toastIcon.className = "fa-solid fa-circle-check text-sm text-emerald-600";
+            } else if (type === 'info') {
+                toast.className = "mb-6 p-3.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all bg-slate-100 text-slate-800 border border-slate-200 shadow-sm";
+                toastIcon.className = "fa-solid fa-circle-info text-sm text-slate-600";
+            } else {
+                toast.className = "mb-6 p-3.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all bg-rose-50 text-rose-800 border border-rose-200 shadow-sm";
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-sm text-rose-600";
+            }
+
+            toast.classList.remove('hidden');
+
+            toastTimeout = setTimeout(() => {
+                hideToast();
+            }, 3000);
+        }
+
+        function hideToast() {
+            document.getElementById('toastNotification').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
